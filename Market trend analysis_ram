@@ -1,0 +1,50 @@
+import yfinance as yf
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import plotly.graph_objs as go
+from dash import Dash, html, dcc, Input, Output
+
+# Load stock data
+def fetch_stock_data(ticker='AAPL', period='6mo', interval='1d'):
+    data = yf.download(ticker, period=period, interval=interval)
+    data.reset_index(inplace=True)
+    return data
+
+# Build and apply a simple predictive model
+def predict_trend(data):
+    data = data.dropna()
+    data['Days'] = (data['Date'] - data['Date'].min()).dt.days
+    X = data[['Days']]
+    y = data['Close']
+    model = LinearRegression().fit(X, y)
+    data['Predicted'] = model.predict(X)
+    return data
+
+# Create dashboard
+app = Dash(__name__)
+
+app.layout = html.Div([
+    html.H1("Market Trend Analysis"),
+    dcc.Dropdown(id='ticker', options=[
+        {'label': 'Apple', 'value': 'AAPL'},
+        {'label': 'Microsoft', 'value': 'MSFT'},
+        {'label': 'Tesla', 'value': 'TSLA'}
+    ], value='AAPL'),
+    dcc.Graph(id='trend-graph')
+])
+
+@app.callback(
+    Output('trend-graph', 'figure'),
+    Input('ticker', 'value')
+)
+def update_graph(ticker):
+    df = fetch_stock_data(ticker)
+    df = predict_trend(df)
+
+    trace1 = go.Scatter(x=df['Date'], y=df['Close'], mode='lines', name='Actual')
+    trace2 = go.Scatter(x=df['Date'], y=df['Predicted'], mode='lines', name='Predicted')
+    return {'data': [trace1, trace2], 'layout': go.Layout(title=f"{ticker} Trend Forecast")}
+
+# Run server
+if __name__ == '__main__':
+    app.run_server(debug=True)
